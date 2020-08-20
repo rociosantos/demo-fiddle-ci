@@ -1,61 +1,59 @@
 const testService = require('./fiddle-mocha');
+const path = require('path');
+fs = require('fs');
 
-testService('Service: example.com', {
+var recv_vcl = fs.readFileSync(path.join(__dirname, '/vcls/recv.vcl'), 'utf8');
+// console.log("recv", recv_vcl);
+
+var fetch_vcl = fs.readFileSync(path.join(__dirname,'/vcls/fetch.vcl'), 'utf8');
+// console.log("fetch", fetch_vcl);
+
+var error_vcl = fs.readFileSync(path.join(__dirname,'/vcls/error.vcl'), 'utf8');
+// console.log("error", error_vcl);
+
+testService('Service: fiddle example test', {
 	spec: {
-		origins: ["https://httpbin.org"],
+		origins: ["https://httpbin.org", "https://postman-echo.com"],
 		vcl: {
-			recv: `set req.url = querystring.sort(req.url);\nif (req.url.path == "/robots.txt") {\nerror 601;\n}`,
-			error: `if (obj.status == 601) {\nset obj.status = 200;\nset obj.response = "OK";synthetic "User-agent: BadBot" LF "Disallow: /";\nreturn(deliver);\n}`
+			recv: recv_vcl,
+			fetch: fetch_vcl,
+			error: error_vcl
 		}
 	},
 	scenarios: [
 		{
-			name: 'Request normalisation',
+			name: 'Response headers',
 			requests: [
 				{
-					path: "/?bbb=test&eee=e2&eee=e1&&&ddd=test&aaa=test&ccc=test",
+					path: "/response-headers",
 					tests: [
 						'clientFetch.status is 200',
-						'events.where(fnName=recv).count() is 1',
-						'events.where(fnName=recv)[0].url is "/?aaa=test&bbb=test&ccc=test&ddd=test&eee=e1&eee=e2"',
-						//'clientFetch.bodyPreview is "hello"'
+						'originFetches[0].req includes "response-headers?Custom-Header=something"',
+						'originFetches[0].resp includes "custom-header: something"',
+						'originFetches[0].req includes "postman-echo.com"',
 					]
 				}
 			]
 		}, {
-			name: "Robots.txt synthetic",
+			name: "Status",
 			requests: [
 				{
-					path: "/robots.txt",
+					path: "/status/200",
 					tests: [
 						'clientFetch.status is 200',
-						'clientFetch.resp includes "content-length: 30"',
-						'clientFetch.bodyPreview includes "BadBot"',
-						'originFetches.count() is 0'
+						'originFetches[0].req includes "httpbin.org"'
 					]
 				}, {
-					path: "/ROBOTS.txt",
+					path: "/status/400",
 					tests: [
-						'clientFetch.status is 404'
-					]
-				}
-			]
-		}, {
-			name: "Caching",
-			requests: [
-				{
-					path: "/html",
-					tests: [
-						'originFetches.count() is 1',
-						'events.where(fnName=fetch)[0].ttl isAtLeast 3600',
-						'clientFetch.status is 200'
+						'clientFetch.status is 403',
+						'originFetches[0].req includes "httpbin.org"'
 					]
 				}, {
-					path: "/html",
+					path: "/status/500",
 					tests: [
-						'originFetches.count() is 0',
-						'events.where(fnName=hit).count() is 1',
-						'clientFetch.status is 200'
+						'clientFetch.status is 401',
+						'originFetches[0].req includes "httpbin.org"'
 					]
 				}
 			]

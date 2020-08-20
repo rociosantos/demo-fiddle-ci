@@ -1,6 +1,6 @@
 {
-	"name": "demo-fiddle-ci",
-	"private": true,
+  "name": "demo-fiddle-ci",
+  "private": true,
   "version": "1.0.0",
   "scripts": {
     "test": "mocha src/test.js --exit"
